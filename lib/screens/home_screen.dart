@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:post_app/screens/detail_screen.dart';
 import '../models/post_model.dart';
@@ -15,8 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<PostModel> allPosts = [];
   List<PostModel> visiblePosts = [];
-
-  final Set<int> loadedIds = {}; // duplication check
+  final Set<int> loadedIds = {};
 
   int page = 0;
   final int limit = 10;
@@ -43,7 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // 🔹 Initial Fetch
   Future<void> fetchInitialPosts() async {
     try {
       setState(() {
@@ -61,17 +60,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
       loadMorePosts();
     } catch (e) {
-      setState(() {
-        isError = true;
-      });
+      setState(() => isError = true);
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
     }
   }
 
-  // 🔹 Load More (Pagination)
   void loadMorePosts() {
     if (!hasMore) return;
 
@@ -100,7 +94,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => isLoadingMore = false);
   }
 
-  // 🔹 Pull to Refresh
   Future<void> _refresh() async {
     await fetchInitialPosts();
   }
@@ -108,90 +101,60 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          // 🌈 Gradient Header
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.only(top: 50, bottom: 20),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF6C63FF), Color(0xFF8F94FB)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(25)),
-            ),
-            child: const Center(
-              child: Text(
-                "Posts",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-
-          // 📦 Body
-          Expanded(
-            child: isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : isError
-                ? _buildError()
-                : RefreshIndicator(
-                    onRefresh: _refresh,
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      itemCount: visiblePosts.length + 1,
-                      itemBuilder: (context, index) {
-                        if (index < visiblePosts.length) {
-                          return _buildPostCard(visiblePosts[index], index);
-                        } else {
-                          if (hasMore) {
-                            return const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Center(child: CircularProgressIndicator()),
-                            );
-                          } else {
-                            return const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Center(child: Text("No more posts")),
-                            );
-                          }
-                        }
-                      },
-                    ),
+      body: isLoading
+          ? _buildShimmer()
+          : isError
+          ? _buildError()
+          : RefreshIndicator(
+              onRefresh: _refresh,
+              child: CustomScrollView(
+                controller: _scrollController,
+                slivers: [
+                  _buildSliverHeader(),
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      if (index < visiblePosts.length) {
+                        return _buildPostCard(visiblePosts[index], index);
+                      } else {
+                        return _buildBottomLoader();
+                      }
+                    }, childCount: visiblePosts.length + 1),
                   ),
+                ],
+              ),
+            ),
+    );
+  }
+
+  // 🌈 SLIVER HEADER (PRO)
+  Widget _buildSliverHeader() {
+    return SliverAppBar(
+      expandedHeight: 160,
+      floating: false,
+      pinned: true,
+      flexibleSpace: FlexibleSpaceBar(
+        title: const Text("Discover Posts"),
+        background: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF6C63FF), Color(0xFF8F94FB)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  // ❌ Error UI
-  Widget _buildError() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text("Something went wrong"),
-          const SizedBox(height: 10),
-          ElevatedButton(
-            onPressed: fetchInitialPosts,
-            child: const Text("Retry"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 🧾 Post Card UI with Animation
+  // 🧊 GLASS CARD
   Widget _buildPostCard(PostModel post, int index) {
-    return AnimatedOpacity(
-      duration: Duration(milliseconds: 300 + (index * 50)),
-      opacity: 1,
+    return TweenAnimationBuilder(
+      duration: Duration(milliseconds: 400 + (index * 50)),
+      tween: Tween(begin: 50.0, end: 0.0),
+      builder: (context, value, child) {
+        return Transform.translate(offset: Offset(0, value), child: child);
+      },
       child: GestureDetector(
         onTap: () {
           Navigator.push(
@@ -200,50 +163,101 @@ class _HomeScreenState extends State<HomeScreen> {
               transitionDuration: const Duration(milliseconds: 400),
               pageBuilder: (_, __, ___) => DetailScreen(post: post),
               transitionsBuilder: (_, animation, __, child) {
-                return SlideTransition(
-                  position: Tween(
-                    begin: const Offset(1, 0),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
-                );
+                return FadeTransition(opacity: animation, child: child);
               },
             ),
           );
         },
         child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: Card(
-            elevation: 4,
-            shadowColor: Colors.black12,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    post.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white30),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      post.title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: Colors.black,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    post.body,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.black54),
-                  ),
-                ],
+                    const SizedBox(height: 10),
+                    Text(
+                      post.body,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // ❤️ Micro interaction row
+                    Row(
+                      children: [
+                        Icon(Icons.favorite_border, size: 20),
+                        SizedBox(width: 10),
+                        Icon(Icons.share, size: 20),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  // 🔄 Bottom Loader
+  Widget _buildBottomLoader() {
+    if (hasMore) {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    } else {
+      return const Padding(
+        padding: EdgeInsets.all(16),
+        child: Center(child: Text("🎉 You're all caught up")),
+      );
+    }
+  }
+
+  // ❌ Error
+  Widget _buildError() {
+    return Center(
+      child: ElevatedButton(
+        onPressed: fetchInitialPosts,
+        child: const Text("Retry"),
+      ),
+    );
+  }
+
+  // ✨ SHIMMER LOADING
+  Widget _buildShimmer() {
+    return ListView.builder(
+      itemCount: 6,
+      itemBuilder: (_, __) {
+        return Container(
+          margin: const EdgeInsets.all(16),
+          height: 100,
+          decoration: BoxDecoration(
+            color: Colors.grey.shade300,
+            borderRadius: BorderRadius.circular(15),
+          ),
+        );
+      },
     );
   }
 }
